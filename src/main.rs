@@ -1,4 +1,5 @@
 mod camera;
+mod cli;
 mod color;
 mod hittable;
 mod image;
@@ -8,17 +9,20 @@ mod sphere;
 mod vec3;
 
 use camera::Camera;
+use clap::Parser;
+use cli::{Cli, Dimensions};
 use color::Color;
 use hittable::{Hittable, HittableList};
 use image::Image;
 use material::{Dielectric, Lambertian, Material, Metal};
 use rand::{prelude::ThreadRng, Rng};
 use ray::Ray;
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, ParallelExtend, ParallelIterator,
-};
 use sphere::Sphere;
-use std::{io, sync::Arc};
+use std::{
+    io,
+    sync::{mpsc, Arc},
+    thread,
+};
 use vec3::Vec3;
 
 fn random_scene() -> HittableList {
@@ -132,7 +136,7 @@ fn random_scene() -> HittableList {
     world
 }
 
-fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: u32) -> Color {
+fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: usize) -> Color {
     if depth == 0 {
         return Color {
             r: 0.0,
@@ -171,7 +175,47 @@ fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: u32) -
     }
 }
 
+fn get_pixel_color(
+    rng: &mut ThreadRng,
+    camera: &Camera,
+    world: &HittableList,
+    recursion_depth: usize,
+    rays_per_pixel: usize,
+    rays_per_pixel_f64: f64,
+    x: f64,
+    y: f64,
+    x_total: f64,
+    y_total: f64,
+) -> Color {
+    let mut color = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
+    let x = x as f64;
+
+    for _ in 0..rays_per_pixel {
+        let u = (x + rng.gen::<f64>()) / x_total;
+        let v = (y + rng.gen::<f64>()) / y_total;
+        let ray = camera.get_ray(u, v);
+        color += ray_color(rng, &ray, world, recursion_depth);
+    }
+
+    (color / rays_per_pixel_f64).sqrt()
+}
+
 fn main() {
+    let cli = Cli::parse();
+
+    let num_threads = cli.num_threads.unwrap_or_else(num_cpus::get_physical);
+    let rays_per_pixel = cli.rays_per_pixel;
+    let recursion_depth = cli.recursion_depth;
+    let Dimensions {
+        width: image_width,
+        height: image_height,
+    } = cli.dimensions;
+    let aspect_ratio = image_width as f64 / image_height as f64;
+
     let look_from = Vec3 {
         x: 13.0,
         y: 2.0,
@@ -183,7 +227,7 @@ fn main() {
         z: 0.0,
     };
     let camera = Camera::new(
-        3.0 / 2.0,
+        aspect_ratio,
         20.0,
         &Vec3 {
             x: 0.0,
@@ -196,61 +240,94 @@ fn main() {
         10.0,
     );
 
-    let image_width: usize = 1200;
-    let image_height: usize = (image_width as f64 / camera.aspect_ratio()) as usize;
-
     let world = random_scene();
 
-    let samples_per_pixel = 500;
-    let samples_per_pixel_f64 = samples_per_pixel as f64;
-    let max_depth = 50;
-    let world_ref = &world;
-    let camera_ref = &camera;
+    let rays_per_pixel_f64 = rays_per_pixel as f64;
+    let world_ref = Arc::new(world);
+    let camera_ref = Arc::new(camera);
     let x_total = (image_width - 1) as f64;
     let y_total = (image_height - 1) as f64;
+
+    let data = {
+        eprintln!("Using {} threads.", num_threads);
+
+        let (outputs_reciever, rows_remaining) = {
+            let (outputs_sender, outputs_reciever) = mpsc::channel::<(usize, usize, Vec<Color>)>();
+            let max_rows_per_thread: usize =
+                (image_height as f64 / num_threads as f64).ceil() as usize;
+
+            let mut rows_remaining = Vec::with_capacity(num_threads);
+            for thread in 0..num_threads {
+                let outputs_sender = outputs_sender.clone();
+                let world_ref = world_ref.clone();
+                let camera_ref = camera_ref.clone();
+
+                let thread_y_start: usize = thread * max_rows_per_thread;
+                assert!(thread_y_start < image_height);
+
+                let thread_y_end = (thread_y_start + max_rows_per_thread).min(image_height);
+
+                rows_remaining.push(thread_y_end - thread_y_start);
+
+                let _ = thread::spawn(move || {
+                    let mut rng = rand::thread_rng();
+                    for y in thread_y_start..thread_y_end {
+                        let y_f64 = y as f64;
+                        let row = (0..image_width)
+                            .map(|x| {
+                                get_pixel_color(
+                                    &mut rng,
+                                    camera_ref.as_ref(),
+                                    world_ref.as_ref(),
+                                    recursion_depth,
+                                    rays_per_pixel,
+                                    rays_per_pixel_f64,
+                                    x as f64,
+                                    y_f64,
+                                    x_total,
+                                    y_total,
+                                )
+                            })
+                            .collect();
+                        outputs_sender
+                            .send((thread, y, row))
+                            .expect("failed to send color");
+                    }
+                });
+            }
+            assert!(
+                rows_remaining.iter().sum::<usize>() == image_height,
+                "rows_remaining: {}",
+                rows_remaining.iter().sum::<usize>()
+            );
+
+            (outputs_reciever, rows_remaining)
+        };
+
+        let mut rows_remaining = rows_remaining.into_iter().sum::<usize>();
+        let data: Vec<Color> = {
+            let mut data: Vec<(usize, Vec<Color>)> = Vec::with_capacity(image_height);
+            while let Ok((_, y, row)) = outputs_reciever.recv() {
+                data.push((y, row));
+                rows_remaining -= 1;
+                eprint!("\r\x1B[0K");
+                eprint!("rows remaining: {:?}", rows_remaining);
+            }
+            assert!(rows_remaining == 0);
+            data.sort_by(|a, b| b.0.cmp(&a.0));
+            data.into_iter().flat_map(|x| x.1.into_iter()).collect()
+        };
+        eprintln!();
+
+        data
+    };
+
     let image = Image {
         width: image_width,
         height: image_height,
-        data: {
-            let mut data = Vec::with_capacity(image_width * image_height);
-
-            eprintln!("number of cores: {}", num_cpus::get_physical());
-            let threads = 2;
-            eprintln!("using {} threads", threads);
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build_global()
-                .unwrap();
-
-            data.par_extend((0..image_height).into_par_iter().rev().flat_map(|y| {
-                // eprint!("\r\x1B[0K");
-                // eprint!("rows remaining: {}", y);
-                let y = y as f64;
-
-                (0..image_width).into_par_iter().map(move |x| {
-                    let mut rng = rand::thread_rng();
-
-                    let mut color = Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                    };
-                    let x = x as f64;
-
-                    for _ in 0..samples_per_pixel {
-                        let u = (x + rng.gen::<f64>()) / x_total;
-                        let v = (y + rng.gen::<f64>()) / y_total;
-                        let ray = camera_ref.get_ray(u, v);
-                        color += ray_color(&mut rng, &ray, world_ref, max_depth);
-                    }
-
-                    (color / samples_per_pixel_f64).sqrt()
-                })
-            }));
-
-            data
-        },
+        data,
     };
 
+    eprintln!("Writing file...");
     image.render(&mut io::stdout()).expect("render failed");
 }

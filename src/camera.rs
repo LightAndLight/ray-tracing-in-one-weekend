@@ -2,7 +2,6 @@ use crate::{ray::Ray, vec3::Vec3};
 use rand::Rng;
 
 pub struct Camera {
-    aspect_ratio: f64,
     origin: Vec3,
     u: Vec3,
     v: Vec3,
@@ -37,7 +36,6 @@ impl Camera {
         let lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - focal_distance * w;
 
         Camera {
-            aspect_ratio,
             origin,
             horizontal,
             vertical,
@@ -47,10 +45,6 @@ impl Camera {
             w,
             lens_radius: aperture / 2.0,
         }
-    }
-
-    pub fn aspect_ratio(&self) -> f64 {
-        self.aspect_ratio
     }
 
     pub fn get_ray(&self, s: f64, t: f64) -> Ray {
