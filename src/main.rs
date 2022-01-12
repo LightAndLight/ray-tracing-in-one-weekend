@@ -20,7 +20,10 @@ use ray::Ray;
 use sphere::Sphere;
 use std::{
     io,
-    sync::{mpsc, Arc},
+    sync::{
+        atomic::{self, AtomicBool},
+        mpsc, Arc,
+    },
     thread,
 };
 use vec3::Vec3;
@@ -251,27 +254,20 @@ fn main() {
     let data = {
         eprintln!("Using {} threads.", num_threads);
 
-        let (outputs_reciever, rows_remaining) = {
-            let (outputs_sender, outputs_reciever) = mpsc::channel::<(usize, usize, Vec<Color>)>();
-            let max_rows_per_thread: usize =
-                (image_height as f64 / num_threads as f64).ceil() as usize;
+        let outputs_reciever = {
+            let (inputs_sender, inputs_reciever) = crossbeam_channel::unbounded::<usize>();
+            let (outputs_sender, outputs_reciever) =
+                crossbeam_channel::unbounded::<(usize, usize, Vec<Color>)>();
 
-            let mut rows_remaining = Vec::with_capacity(num_threads);
             for thread in 0..num_threads {
+                let inputs_reciever = inputs_reciever.clone();
                 let outputs_sender = outputs_sender.clone();
                 let world_ref = world_ref.clone();
                 let camera_ref = camera_ref.clone();
 
-                let thread_y_start: usize = thread * max_rows_per_thread;
-                assert!(thread_y_start < image_height);
-
-                let thread_y_end = (thread_y_start + max_rows_per_thread).min(image_height);
-
-                rows_remaining.push(thread_y_end - thread_y_start);
-
                 let _ = thread::spawn(move || {
                     let mut rng = rand::thread_rng();
-                    for y in thread_y_start..thread_y_end {
+                    while let Ok(y) = inputs_reciever.recv() {
                         let y_f64 = y as f64;
                         let row = (0..image_width)
                             .map(|x| {
@@ -293,18 +289,22 @@ fn main() {
                             .send((thread, y, row))
                             .expect("failed to send color");
                     }
+
+                    /*
+                    for y in thread_y_start..thread_y_end {
+                    }
+                     */
                 });
             }
-            assert!(
-                rows_remaining.iter().sum::<usize>() == image_height,
-                "rows_remaining: {}",
-                rows_remaining.iter().sum::<usize>()
-            );
 
-            (outputs_reciever, rows_remaining)
+            for y in 0..image_height {
+                inputs_sender.send(y).expect("failed to send input");
+            }
+
+            outputs_reciever
         };
 
-        let mut rows_remaining = rows_remaining.into_iter().sum::<usize>();
+        let mut rows_remaining = image_height;
         let data: Vec<Color> = {
             let mut data: Vec<(usize, Vec<Color>)> = Vec::with_capacity(image_height);
             while let Ok((_, y, row)) = outputs_reciever.recv() {
