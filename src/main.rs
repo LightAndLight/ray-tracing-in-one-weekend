@@ -18,14 +18,7 @@ use material::{Dielectric, Lambertian, Material, Metal};
 use rand::{prelude::ThreadRng, Rng};
 use ray::Ray;
 use sphere::Sphere;
-use std::{
-    io,
-    sync::{
-        atomic::{self, AtomicBool},
-        mpsc, Arc,
-    },
-    thread,
-};
+use std::{io, sync::Arc, thread};
 use vec3::Vec3;
 
 fn random_scene() -> HittableList {
@@ -257,9 +250,9 @@ fn main() {
         let outputs_reciever = {
             let (inputs_sender, inputs_reciever) = crossbeam_channel::unbounded::<usize>();
             let (outputs_sender, outputs_reciever) =
-                crossbeam_channel::unbounded::<(usize, usize, Vec<Color>)>();
+                crossbeam_channel::unbounded::<(usize, Vec<Color>)>();
 
-            for thread in 0..num_threads {
+            for _ in 0..num_threads {
                 let inputs_reciever = inputs_reciever.clone();
                 let outputs_sender = outputs_sender.clone();
                 let world_ref = world_ref.clone();
@@ -285,15 +278,8 @@ fn main() {
                                 )
                             })
                             .collect();
-                        outputs_sender
-                            .send((thread, y, row))
-                            .expect("failed to send color");
+                        outputs_sender.send((y, row)).expect("failed to send color");
                     }
-
-                    /*
-                    for y in thread_y_start..thread_y_end {
-                    }
-                     */
                 });
             }
 
@@ -307,7 +293,7 @@ fn main() {
         let mut rows_remaining = image_height;
         let data: Vec<Color> = {
             let mut data: Vec<(usize, Vec<Color>)> = Vec::with_capacity(image_height);
-            while let Ok((_, y, row)) = outputs_reciever.recv() {
+            while let Ok((y, row)) = outputs_reciever.recv() {
                 data.push((y, row));
                 rows_remaining -= 1;
                 eprint!("\r\x1B[0K");
