@@ -1,6 +1,7 @@
 use crate::{
-    bounds::{Bounded, Bounds3},
-    hittable::{Hit, Hittable, HittableList},
+    bounds::{Bounds3, HasBounds},
+    hit::{HasHit, Hit},
+    object::Object,
     ray::Ray,
     vec3::Vec3,
 };
@@ -11,8 +12,8 @@ pub enum Bvh {
     Node(BvhNode),
 }
 
-impl From<&[Arc<dyn Hittable + Sync + Send>]> for Bvh {
-    fn from(items: &[Arc<dyn Hittable + Sync + Send>]) -> Self {
+impl From<&[Object]> for Bvh {
+    fn from(items: &[Object]) -> Self {
         if items.is_empty() {
             return Bvh::Empty;
         }
@@ -37,10 +38,7 @@ impl From<&[Arc<dyn Hittable + Sync + Send>]> for Bvh {
             })
             .collect();
 
-        fn build(
-            items: &[Arc<dyn Hittable + Send + Sync>],
-            items_with_info: &[ItemWithInfo],
-        ) -> BvhNode {
+        fn build(items: &[Object], items_with_info: &[ItemWithInfo]) -> BvhNode {
             assert!(!items.is_empty());
 
             /*
@@ -62,12 +60,10 @@ impl From<&[Arc<dyn Hittable + Sync + Send>]> for Bvh {
             if items_with_info.len() == 1 {
                 BvhNode::Leaf {
                     bounds,
-                    items: HittableList::from(
-                        items_with_info
-                            .iter()
-                            .map(|item_with_info| items[item_with_info.item].clone())
-                            .collect::<Vec<_>>(),
-                    ),
+                    items: items_with_info
+                        .iter()
+                        .map(|item_with_info| items[item_with_info.item].clone())
+                        .collect::<Vec<_>>(),
                 }
             } else {
                 let centroid_bounds = {
@@ -87,12 +83,10 @@ impl From<&[Arc<dyn Hittable + Sync + Send>]> for Bvh {
                 if centroid_bounds.min()[partition_axis] == centroid_bounds.max()[partition_axis] {
                     BvhNode::Leaf {
                         bounds,
-                        items: HittableList::from(
-                            items_with_info
-                                .iter()
-                                .map(|item_with_info| items[item_with_info.item].clone())
-                                .collect::<Vec<_>>(),
-                        ),
+                        items: items_with_info
+                            .iter()
+                            .map(|item_with_info| items[item_with_info.item].clone())
+                            .collect::<Vec<_>>(),
                     }
                 } else {
                     let midpoint = centroid_bounds.centroid();
@@ -116,7 +110,7 @@ impl From<&[Arc<dyn Hittable + Sync + Send>]> for Bvh {
     }
 }
 
-impl Bounded for Bvh {
+impl HasBounds for Bvh {
     fn bounds(&self) -> Bounds3 {
         match self {
             Bvh::Empty => Bounds3::point(Vec3::origin()),
@@ -125,11 +119,11 @@ impl Bounded for Bvh {
     }
 }
 
-impl Hittable for Bvh {
-    fn hit_by(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+impl HasHit for Bvh {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         match self {
             Bvh::Empty => None,
-            Bvh::Node(node) => node.hit_by(ray, t_min, t_max),
+            Bvh::Node(node) => node.hit(ray, t_min, t_max),
         }
     }
 }
@@ -142,7 +136,7 @@ pub enum BvhNode {
     },
     Leaf {
         bounds: Bounds3,
-        items: HittableList,
+        items: Vec<Object>,
     },
 }
 
@@ -164,7 +158,7 @@ impl BvhNode {
     }
 }
 
-impl Bounded for BvhNode {
+impl HasBounds for BvhNode {
     fn bounds(&self) -> Bounds3 {
         match self {
             BvhNode::Branch { bounds, .. } => *bounds,
@@ -173,8 +167,8 @@ impl Bounded for BvhNode {
     }
 }
 
-impl Hittable for BvhNode {
-    fn hit_by(&self, ray: &crate::ray::Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+impl HasHit for BvhNode {
+    fn hit(&self, ray: &crate::ray::Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         match self {
             BvhNode::Branch {
                 bounds,
@@ -182,9 +176,9 @@ impl Hittable for BvhNode {
                 right,
             } => {
                 if bounds.hit_by(ray, t_min, t_max) {
-                    match left.hit_by(ray, t_min, t_max) {
-                        Some(left_hit) => right.hit_by(ray, t_min, left_hit.t).or(Some(left_hit)),
-                        None => right.hit_by(ray, t_min, t_max),
+                    match left.hit(ray, t_min, t_max) {
+                        Some(left_hit) => right.hit(ray, t_min, left_hit.t).or(Some(left_hit)),
+                        None => right.hit(ray, t_min, t_max),
                     }
                 } else {
                     None
@@ -192,7 +186,7 @@ impl Hittable for BvhNode {
             }
             BvhNode::Leaf { bounds, items } => {
                 if bounds.hit_by(ray, t_min, t_max) {
-                    items.hit_by(ray, t_min, t_max)
+                    items.hit(ray, t_min, t_max)
                 } else {
                     None
                 }

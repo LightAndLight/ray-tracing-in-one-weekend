@@ -1,36 +1,26 @@
-mod axis;
-mod bounds;
-mod bvh;
-mod camera;
 mod cli;
-mod color;
-mod hittable;
-mod image;
-mod interval;
-mod material;
-mod ray;
-mod sphere;
-mod vec3;
 
-use camera::Camera;
 use clap::Parser;
 use cli::{Cli, Dimensions};
-use color::Color;
-use hittable::{Hittable, HittableList};
-use image::Image;
-use material::{Dielectric, Lambertian, Material, Metal};
 use rand::{prelude::ThreadRng, Rng};
-use ray::Ray;
-use sphere::Sphere;
+use rt_weekend::{
+    bvh::Bvh,
+    camera::Camera,
+    color::Color,
+    hit::HasHit,
+    image::Image,
+    material::{Dielectric, HasScatter, Lambertian, Material, Metal},
+    object::Object,
+    ray::Ray,
+    sphere::Sphere,
+    vec3::Vec3,
+};
 use std::{io, sync::Arc, thread};
-use vec3::Vec3;
 
-use crate::bvh::Bvh;
+fn random_scene() -> Vec<Object> {
+    let mut world = Vec::new();
 
-fn random_scene() -> HittableList {
-    let mut world = HittableList::new();
-
-    let ground_material = Arc::new(Lambertian {
+    let ground_material = Material::new(Lambertian {
         albedo: Color {
             r: 0.5,
             g: 0.5,
@@ -38,7 +28,7 @@ fn random_scene() -> HittableList {
         },
     });
 
-    world.add(Arc::new(Sphere {
+    world.push(Object::new(Sphere {
         center: Vec3 {
             x: 0.0,
             y: -1000.0,
@@ -66,22 +56,22 @@ fn random_scene() -> HittableList {
             .norm()
                 > 0.9
             {
-                let sphere_material: Arc<dyn Material + Sync + Send>;
+                let sphere_material: Material;
 
                 if choose_mat < 0.8 {
                     let albedo = rng.gen::<Color>() * rng.gen::<Color>();
-                    sphere_material = Arc::new(Lambertian { albedo });
+                    sphere_material = Material::new(Lambertian { albedo });
                 } else if choose_mat < 0.95 {
                     let albedo = rng.gen::<Color>();
                     let fuzziness = rng.gen_range(0.0..0.5);
-                    sphere_material = Arc::new(Metal { albedo, fuzziness });
+                    sphere_material = Material::new(Metal { albedo, fuzziness });
                 } else {
-                    sphere_material = Arc::new(Dielectric {
+                    sphere_material = Material::new(Dielectric {
                         refractive_index: 1.5,
                     });
                 }
 
-                world.add(Arc::new(Sphere {
+                world.push(Object::new(Sphere {
                     center,
                     radius: 0.2,
                     material: sphere_material,
@@ -90,26 +80,26 @@ fn random_scene() -> HittableList {
         }
     }
 
-    world.add(Arc::new(Sphere {
+    world.push(Object::new(Sphere {
         center: Vec3 {
             x: 0.0,
             y: 1.0,
             z: 0.0,
         },
         radius: 1.0,
-        material: Arc::new(Dielectric {
+        material: Material::new(Dielectric {
             refractive_index: 1.5,
         }),
     }));
 
-    world.add(Arc::new(Sphere {
+    world.push(Object::new(Sphere {
         center: Vec3 {
             x: -4.0,
             y: 1.0,
             z: 0.0,
         },
         radius: 1.0,
-        material: Arc::new(Lambertian {
+        material: Material::new(Lambertian {
             albedo: Color {
                 r: 0.4,
                 g: 0.2,
@@ -118,14 +108,14 @@ fn random_scene() -> HittableList {
         }),
     }));
 
-    world.add(Arc::new(Sphere {
+    world.push(Object::new(Sphere {
         center: Vec3 {
             x: 4.0,
             y: 1.0,
             z: 0.0,
         },
         radius: 1.0,
-        material: Arc::new(Metal {
+        material: Material::new(Metal {
             albedo: Color {
                 r: 0.7,
                 g: 0.6,
@@ -138,7 +128,7 @@ fn random_scene() -> HittableList {
     world
 }
 
-fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: usize) -> Color {
+fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn HasHit, depth: usize) -> Color {
     if depth == 0 {
         return Color {
             r: 0.0,
@@ -147,8 +137,8 @@ fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: usize)
         };
     }
 
-    if let Some(hit) = world.hit_by(ray, 0.001, f64::INFINITY) {
-        let material = hit.material.as_ref();
+    if let Some(hit) = world.hit(ray, 0.001, f64::INFINITY) {
+        let material = &hit.material;
 
         match material.scatter(rng, ray, &hit) {
             Some(scatter) => {
@@ -180,7 +170,7 @@ fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: usize)
 fn get_pixel_color(
     rng: &mut ThreadRng,
     camera: &Camera,
-    world: &dyn Hittable,
+    world: &dyn HasHit,
     recursion_depth: usize,
     rays_per_pixel: usize,
     rays_per_pixel_f64: f64,

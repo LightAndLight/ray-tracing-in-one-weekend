@@ -1,4 +1,4 @@
-use crate::{axis::Axis3, hittable::Hittable, interval::Interval, ray::Ray, vec3::Vec3};
+use crate::{axis::Axis3, interval::Interval, ray::Ray, vec3::Vec3};
 
 #[derive(Clone, Copy)]
 pub struct Bounds3 {
@@ -134,18 +134,23 @@ impl Bounds3 {
     }
 }
 
-pub trait Bounded {
+pub trait HasBounds {
     fn bounds(&self) -> Bounds3;
 }
 
-impl<T: AsRef<dyn Hittable + Sync + Send>> Bounded for &[T] {
+impl<T: HasBounds> HasBounds for &[T] {
     fn bounds(&self) -> Bounds3 {
         if self.is_empty() {
             Bounds3::point(Vec3::origin())
         } else {
-            let init = self[0].as_ref().bounds();
-            self.iter()
-                .fold(init, |acc, el| acc.union(&el.as_ref().bounds()))
+            let init = self[0].bounds();
+            self.iter().fold(init, |acc, el| acc.union(&el.bounds()))
         }
+    }
+}
+
+impl<T: HasBounds> HasBounds for Vec<T> {
+    fn bounds(&self) -> Bounds3 {
+        self.as_slice().bounds()
     }
 }

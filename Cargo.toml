@@ -10,3 +10,11 @@ clap = { version = "3.0.6", features = ["derive"] }
 crossbeam-channel = "0.5"
 num_cpus = "1.13.1"
 rand = "0.8.4"
+
+[lib]
+name = "rt_weekend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rt_weekend"
+path = "src/main.rs"

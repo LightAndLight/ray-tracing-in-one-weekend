@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::{
     color::Color,
-    hittable::{Face, Hit},
+    hit::{Face, Hit},
     ray::Ray,
     vec3::Vec3,
 };
@@ -11,9 +13,24 @@ pub struct Scatter {
     pub outgoing: Ray,
 }
 
-pub trait Material {
+pub trait HasScatter {
     /// Scatter a `ray` that has `hit` a material.
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter>;
+}
+
+#[derive(Clone)]
+pub struct Material(Arc<dyn HasScatter + Send + Sync>);
+
+impl Material {
+    pub fn new<T: HasScatter + Send + Sync + 'static>(value: T) -> Self {
+        Material(Arc::new(value))
+    }
+}
+
+impl HasScatter for Material {
+    fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
+        self.0.scatter(rng, ray, hit)
+    }
 }
 
 fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
@@ -31,7 +48,7 @@ pub struct DiffuseHack {
     pub albedo: Color,
 }
 
-impl Material for DiffuseHack {
+impl HasScatter for DiffuseHack {
     fn scatter(&self, rng: &mut ThreadRng, _: &Ray, hit: &Hit) -> Option<Scatter> {
         Some(Scatter {
             attenuation: self.albedo,
@@ -47,7 +64,7 @@ pub struct Lambertian {
     pub albedo: Color,
 }
 
-impl Material for Lambertian {
+impl HasScatter for Lambertian {
     fn scatter(&self, rng: &mut ThreadRng, _: &Ray, hit: &Hit) -> Option<Scatter> {
         fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
             loop {
@@ -83,7 +100,7 @@ pub struct Metal {
     pub fuzziness: f64,
 }
 
-impl Material for Metal {
+impl HasScatter for Metal {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         let direction =
             ray.direction.reflect(&hit.normal) + self.fuzziness * random_in_unit_sphere(rng);
@@ -106,7 +123,7 @@ pub struct Dielectric {
     pub refractive_index: f64,
 }
 
-impl Material for Dielectric {
+impl HasScatter for Dielectric {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         let attenuation = Color {
             r: 1.0,

@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use crate::{
-    bounds::{Bounded, Bounds3},
-    hittable::{Face, Hit, Hittable},
+    bounds::{Bounds3, HasBounds},
+    hit::{Face, HasHit, Hit},
     material::Material,
     ray::Ray,
     vec3::Vec3,
@@ -11,10 +9,10 @@ use crate::{
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f64,
-    pub material: Arc<dyn Material + Sync + Send>,
+    pub material: Material,
 }
 
-impl Bounded for Sphere {
+impl HasBounds for Sphere {
     fn bounds(&self) -> Bounds3 {
         let corner = Vec3 {
             x: self.radius,
@@ -25,8 +23,8 @@ impl Bounded for Sphere {
     }
 }
 
-impl Hittable for Sphere {
-    fn hit_by(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+impl HasHit for Sphere {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         let a = ray.direction.norm_squared();
         let half_b = ray.direction.dot(ray.origin - self.center);
         let c = (ray.origin - self.center).norm_squared() - self.radius.powi(2);
