@@ -1,8 +1,12 @@
+mod axis;
+mod bounds;
+mod bvh;
 mod camera;
 mod cli;
 mod color;
 mod hittable;
 mod image;
+mod interval;
 mod material;
 mod ray;
 mod sphere;
@@ -20,6 +24,8 @@ use ray::Ray;
 use sphere::Sphere;
 use std::{io, sync::Arc, thread};
 use vec3::Vec3;
+
+use crate::bvh::Bvh;
 
 fn random_scene() -> HittableList {
     let mut world = HittableList::new();
@@ -174,7 +180,7 @@ fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn Hittable, depth: usize)
 fn get_pixel_color(
     rng: &mut ThreadRng,
     camera: &Camera,
-    world: &HittableList,
+    world: &dyn Hittable,
     recursion_depth: usize,
     rays_per_pixel: usize,
     rays_per_pixel_f64: f64,
@@ -236,7 +242,7 @@ fn main() {
         10.0,
     );
 
-    let world = random_scene();
+    let world = Bvh::from(random_scene().as_ref());
 
     let rays_per_pixel_f64 = rays_per_pixel as f64;
     let world_ref = Arc::new(world);

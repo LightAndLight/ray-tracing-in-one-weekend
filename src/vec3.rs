@@ -1,6 +1,8 @@
 use rand::{distributions::uniform::SampleRange, Rng};
 
-#[derive(Clone, Copy)]
+use crate::axis::Axis3;
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Vec3 {
     pub x: f64,
     pub y: f64,
@@ -101,6 +103,15 @@ impl Vec3 {
             Some(refracted_parallel + refracted_perpendicular)
         }
     }
+
+    /// `(0, 0, 0)`
+    pub fn origin() -> Self {
+        Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
+    }
 }
 
 /// Pointwise addition.
@@ -142,6 +153,19 @@ impl std::ops::Mul<Vec3> for f64 {
     }
 }
 
+/// Left-scalar multiplication.
+impl std::ops::Mul<&Vec3> for f64 {
+    type Output = Vec3;
+
+    fn mul(self, rhs: &Vec3) -> Self::Output {
+        Vec3 {
+            x: self * rhs.x,
+            y: self * rhs.y,
+            z: self * rhs.z,
+        }
+    }
+}
+
 /// Right-scalar multiplication.
 impl std::ops::Mul<f64> for Vec3 {
     type Output = Vec3;
@@ -155,6 +179,7 @@ impl std::ops::Mul<f64> for Vec3 {
     }
 }
 
+/// Pointwise negation.
 impl std::ops::Neg for Vec3 {
     type Output = Vec3;
 
@@ -163,7 +188,7 @@ impl std::ops::Neg for Vec3 {
     }
 }
 
-/// Scalar division
+/// Scalar division.
 impl std::ops::Div<f64> for Vec3 {
     type Output = Vec3;
 
@@ -178,6 +203,18 @@ impl rand::distributions::Distribution<Vec3> for rand::distributions::Standard {
             x: rng.sample(self),
             y: rng.sample(self),
             z: rng.sample(self),
+        }
+    }
+}
+
+impl std::ops::Index<Axis3> for Vec3 {
+    type Output = f64;
+
+    fn index(&self, index: Axis3) -> &Self::Output {
+        match index {
+            Axis3::X => &self.x,
+            Axis3::Y => &self.y,
+            Axis3::Z => &self.z,
         }
     }
 }

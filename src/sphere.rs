@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    bounds::Bounds3,
     hittable::{Face, Hit, Hittable},
     material::Material,
     ray::Ray,
@@ -45,5 +46,14 @@ impl Hittable for Sphere {
                 material: self.material.clone(),
             })
         }
+    }
+
+    fn bounds(&self) -> Bounds3 {
+        let corner = Vec3 {
+            x: self.radius,
+            y: self.radius,
+            z: self.radius,
+        };
+        Bounds3::new(self.center - corner, self.center + corner)
     }
 }
