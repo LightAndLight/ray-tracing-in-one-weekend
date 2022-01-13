@@ -1,4 +1,4 @@
-use crate::{axis::Axis3, interval::Interval, ray::Ray, vec3::Vec3};
+use crate::{axis::Axis3, hittable::Hittable, interval::Interval, ray::Ray, vec3::Vec3};
 
 #[derive(Clone, Copy)]
 pub struct Bounds3 {
@@ -33,22 +33,6 @@ impl Bounds3 {
         &self.max
     }
 
-    /// Create an 'infinite' volume bounding box that contains everything.
-    pub fn everything() -> Self {
-        Bounds3 {
-            min: Vec3 {
-                x: f64::MIN,
-                y: f64::MIN,
-                z: f64::MIN,
-            },
-            max: Vec3 {
-                x: f64::MAX,
-                y: f64::MAX,
-                z: f64::MAX,
-            },
-        }
-    }
-
     /// Create a zero-volume bounding box at a point.
     pub fn point(v: Vec3) -> Self {
         Bounds3 { min: v, max: v }
@@ -66,22 +50,6 @@ impl Bounds3 {
                 x: self.max.x.max(other.max.x),
                 y: self.max.y.max(other.max.y),
                 z: self.max.z.max(other.max.z),
-            },
-        }
-    }
-
-    /// Compute the intersection of two bounding boxes.
-    pub fn intersect(&self, other: &Bounds3) -> Self {
-        Bounds3 {
-            min: Vec3 {
-                x: self.min.x.max(other.min.x),
-                y: self.min.y.max(other.min.y),
-                z: self.min.z.max(other.min.z),
-            },
-            max: Vec3 {
-                x: self.max.x.min(other.max.x),
-                y: self.max.y.min(other.max.y),
-                z: self.max.z.min(other.max.z),
             },
         }
     }
@@ -163,5 +131,21 @@ impl Bounds3 {
         }
 
         !t_interval.is_empty()
+    }
+}
+
+pub trait Bounded {
+    fn bounds(&self) -> Bounds3;
+}
+
+impl<T: AsRef<dyn Hittable + Sync + Send>> Bounded for &[T] {
+    fn bounds(&self) -> Bounds3 {
+        if self.is_empty() {
+            Bounds3::point(Vec3::origin())
+        } else {
+            let init = self[0].as_ref().bounds();
+            self.iter()
+                .fold(init, |acc, el| acc.union(&el.as_ref().bounds()))
+        }
     }
 }

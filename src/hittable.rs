@@ -1,4 +1,9 @@
-use crate::{bounds::Bounds3, material::Material, ray::Ray, vec3::Vec3};
+use crate::{
+    bounds::{Bounded, Bounds3},
+    material::Material,
+    ray::Ray,
+    vec3::Vec3,
+};
 use std::sync::Arc;
 
 pub enum Face {
@@ -14,9 +19,8 @@ pub struct Hit {
     pub material: Arc<dyn Material + Sync + Send>,
 }
 
-pub trait Hittable {
+pub trait Hittable: Bounded {
     fn hit_by(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit>;
-    fn bounds(&self) -> Bounds3;
 }
 
 pub struct HittableList {
@@ -28,10 +32,6 @@ impl HittableList {
         HittableList {
             objects: Vec::new(),
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.objects.clear()
     }
 
     pub fn add(&mut self, object: Arc<dyn Hittable + Sync + Send>) {
@@ -55,6 +55,18 @@ impl<const N: usize> From<[Arc<dyn Hittable + Sync + Send>; N]> for HittableList
     }
 }
 
+impl From<Vec<Arc<dyn Hittable + Sync + Send>>> for HittableList {
+    fn from(objects: Vec<Arc<dyn Hittable + Sync + Send>>) -> Self {
+        HittableList { objects }
+    }
+}
+
+impl Bounded for HittableList {
+    fn bounds(&self) -> Bounds3 {
+        self.objects.as_slice().bounds()
+    }
+}
+
 impl Hittable for HittableList {
     fn hit_by(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         let mut result = None;
@@ -66,17 +78,6 @@ impl Hittable for HittableList {
             }
         }
         result
-    }
-
-    fn bounds(&self) -> Bounds3 {
-        self.objects.iter().fold(
-            Bounds3::point(Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            }),
-            |acc, el| acc.union(&el.bounds()),
-        )
     }
 }
 

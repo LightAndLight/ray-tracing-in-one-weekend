@@ -1,5 +1,5 @@
 use crate::{
-    bounds::Bounds3,
+    bounds::{Bounded, Bounds3},
     hittable::{Hit, Hittable, HittableList},
     ray::Ray,
     vec3::Vec3,
@@ -17,90 +17,111 @@ impl From<&[Arc<dyn Hittable + Sync + Send>]> for Bvh {
             return Bvh::Empty;
         }
 
-        #[derive(Clone)]
-        struct ItemInfo {
+        #[derive(Clone, Copy)]
+        struct ItemWithInfo {
             bounds: Bounds3,
             centroid: Vec3,
-            item: Arc<dyn Hittable + Sync + Send>,
+            item: usize,
         }
 
-        let item_infos: Vec<ItemInfo> = items
+        let items_with_info: Vec<ItemWithInfo> = items
             .iter()
-            .cloned()
-            .map(|item| {
+            .enumerate()
+            .map(|(ix, item)| {
                 let bounds = item.bounds();
-                let centroid = 0.5 * bounds.min() + 0.5 * bounds.max();
-                ItemInfo {
+                ItemWithInfo {
                     bounds,
-                    centroid,
-                    item,
+                    centroid: bounds.centroid(),
+                    item: ix,
                 }
             })
             .collect();
 
-        fn build(item_infos: &[ItemInfo]) -> BvhNode {
-            let bounds = item_infos
-                .iter()
-                .fold(Bounds3::point(Vec3::origin()), |acc, el| {
-                    acc.union(&el.bounds)
-                });
+        fn build(
+            items: &[Arc<dyn Hittable + Send + Sync>],
+            items_with_info: &[ItemWithInfo],
+        ) -> BvhNode {
+            assert!(!items.is_empty());
 
-            if item_infos.len() == 1 {
+            /*
+            Every `BvhNode` has an associated bounding box. The bounding box contains all
+            of the node's items, so if an array does not intersect the bounding box then it
+            does not intersect any of the items.
+            */
+            let bounds = {
+                assert!(!items_with_info.is_empty());
+                let init = items_with_info[0].bounds;
+
+                items_with_info[1..]
+                    .iter()
+                    .fold(init, |bounds, item_with_info| {
+                        bounds.union(&item_with_info.bounds)
+                    })
+            };
+
+            if items_with_info.len() == 1 {
                 BvhNode::Leaf {
                     bounds,
-                    items: HittableList::from([item_infos[0].item.clone()]),
+                    items: HittableList::from(
+                        items_with_info
+                            .iter()
+                            .map(|item_with_info| items[item_with_info.item].clone())
+                            .collect::<Vec<_>>(),
+                    ),
                 }
             } else {
                 let centroid_bounds = {
-                    assert!(item_infos.len() > 1);
-                    let init = Bounds3::point(item_infos[0].centroid);
+                    assert!(!items_with_info.is_empty());
+                    let init = Bounds3::point(items_with_info[0].centroid);
 
-                    item_infos[1..]
+                    items_with_info[1..]
                         .iter()
-                        .fold(init, |acc, el| acc.union(&Bounds3::point(el.centroid)))
+                        .fold(init, |centroid_bounds, item_with_info| {
+                            centroid_bounds.union(&Bounds3::point(item_with_info.centroid))
+                        })
                 };
 
                 let partition_axis = centroid_bounds.maximum_extent();
 
+                // The items' centroids coincide, so they cannot be partitioned in space.
                 if centroid_bounds.min()[partition_axis] == centroid_bounds.max()[partition_axis] {
                     BvhNode::Leaf {
                         bounds,
                         items: HittableList::from(
-                            item_infos
+                            items_with_info
                                 .iter()
-                                .map(|item_info| item_info.item.clone())
-                                .collect::<Vec<Arc<dyn Hittable + Send + Sync>>>()
-                                .as_slice(),
+                                .map(|item_with_info| items[item_with_info.item].clone())
+                                .collect::<Vec<_>>(),
                         ),
                     }
                 } else {
                     let midpoint = centroid_bounds.centroid();
-                    let (left_item_infos, right_item_infos) = item_infos
+                    let (items_with_info_left, items_with_info_right) = items_with_info
                         .iter()
-                        .cloned()
-                        .partition::<Vec<ItemInfo>, _>(|item_info| {
-                            item_info.centroid[partition_axis] < midpoint[partition_axis]
+                        .copied()
+                        .partition::<Vec<ItemWithInfo>, _>(|item_with_info| {
+                            item_with_info.centroid[partition_axis] < midpoint[partition_axis]
                         });
 
-                    assert!(
-                        left_item_infos.len() < item_infos.len(),
-                        "partition axis: {:?}\nmidpoint: {:?}\nitem centroids: {:?}",
-                        partition_axis,
-                        midpoint,
-                        item_infos
-                            .iter()
-                            .map(|item_info| item_info.centroid)
-                            .collect::<Vec<Vec3>>()
-                    );
-                    let left = build(&left_item_infos);
-                    let right = build(&right_item_infos);
+                    assert!(items_with_info_left.len() < items.len());
+                    let left = build(items, &items_with_info_left);
+                    let right = build(items, &items_with_info_right);
 
                     BvhNode::branch(left, right)
                 }
             }
         }
 
-        Bvh::Node(build(&item_infos))
+        Bvh::Node(build(items, &items_with_info))
+    }
+}
+
+impl Bounded for Bvh {
+    fn bounds(&self) -> Bounds3 {
+        match self {
+            Bvh::Empty => Bounds3::point(Vec3::origin()),
+            Bvh::Node(node) => node.bounds(),
+        }
     }
 }
 
@@ -109,13 +130,6 @@ impl Hittable for Bvh {
         match self {
             Bvh::Empty => None,
             Bvh::Node(node) => node.hit_by(ray, t_min, t_max),
-        }
-    }
-
-    fn bounds(&self) -> Bounds3 {
-        match self {
-            Bvh::Empty => Bounds3::point(Vec3::origin()),
-            Bvh::Node(node) => node.bounds(),
         }
     }
 }
@@ -150,6 +164,15 @@ impl BvhNode {
     }
 }
 
+impl Bounded for BvhNode {
+    fn bounds(&self) -> Bounds3 {
+        match self {
+            BvhNode::Branch { bounds, .. } => *bounds,
+            BvhNode::Leaf { bounds, .. } => *bounds,
+        }
+    }
+}
+
 impl Hittable for BvhNode {
     fn hit_by(&self, ray: &crate::ray::Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         match self {
@@ -175,9 +198,5 @@ impl Hittable for BvhNode {
                 }
             }
         }
-    }
-
-    fn bounds(&self) -> Bounds3 {
-        todo!()
     }
 }
