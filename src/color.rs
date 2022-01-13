@@ -12,13 +12,14 @@ impl Color {
         writeln!(
             buffer,
             "{} {} {}",
-            (self.r * 255.0).round() as u8,
-            (self.g * 255.0).round() as u8,
-            (self.b * 255.0).round() as u8
+            (self.r * 255.0).clamp(0.0, 255.0).round() as u8,
+            (self.g * 255.0).clamp(0.0, 255.0).round() as u8,
+            (self.b * 255.0).clamp(0.0, 255.0).round() as u8
         )
         .expect("writeln failed")
     }
 
+    #[must_use]
     pub fn sqrt(&self) -> Self {
         Color {
             r: self.r.sqrt(),
@@ -26,6 +27,12 @@ impl Color {
             b: self.b.sqrt(),
         }
     }
+
+    pub const BLACK: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
 }
 
 /// Pointwise addition.

@@ -9,10 +9,11 @@ use rt_weekend::{
     color::Color,
     hit::HasHit,
     image::Image,
-    material::{Dielectric, HasScatter, Lambertian, Material, Metal},
+    material::{Dielectric, HasEmit, HasScatter, Lambertian, Light, Material, Metal},
     object::Object,
     ray::Ray,
     sphere::Sphere,
+    texture::{self, Texture},
     vec3::Vec3,
 };
 use std::{io, sync::Arc, thread};
@@ -21,11 +22,13 @@ fn random_scene() -> Vec<Object> {
     let mut world = Vec::new();
 
     let ground_material = Material::new(Lambertian {
-        albedo: Color {
-            r: 0.5,
-            g: 0.5,
-            b: 0.5,
-        },
+        albedo: Texture::new(texture::Constant {
+            color: Color {
+                r: 0.5,
+                g: 0.5,
+                b: 0.5,
+            },
+        }),
     });
 
     world.push(Object::new(Sphere {
@@ -59,7 +62,9 @@ fn random_scene() -> Vec<Object> {
                 let sphere_material: Material;
 
                 if choose_mat < 0.8 {
-                    let albedo = rng.gen::<Color>() * rng.gen::<Color>();
+                    let albedo = Texture::new(texture::Constant {
+                        color: rng.gen::<Color>() * rng.gen::<Color>(),
+                    });
                     sphere_material = Material::new(Lambertian { albedo });
                 } else if choose_mat < 0.95 {
                     let albedo = rng.gen::<Color>();
@@ -79,6 +84,25 @@ fn random_scene() -> Vec<Object> {
             }
         }
     }
+
+    /*
+    world.push(Object::new(Sphere {
+        center: Vec3 {
+            x: 0.0,
+            y: 20.0,
+            z: 0.0,
+        },
+        radius: 1.0,
+        material: Material::new(Light {
+            brightness: 200.0,
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+            },
+        }),
+    }));
+    */
 
     world.push(Object::new(Sphere {
         center: Vec3 {
@@ -100,14 +124,17 @@ fn random_scene() -> Vec<Object> {
         },
         radius: 1.0,
         material: Material::new(Lambertian {
-            albedo: Color {
-                r: 0.4,
-                g: 0.2,
-                b: 0.1,
-            },
+            albedo: Texture::new(texture::Constant {
+                color: Color {
+                    r: 0.4,
+                    g: 0.2,
+                    b: 0.1,
+                },
+            }),
         }),
     }));
 
+    /*
     world.push(Object::new(Sphere {
         center: Vec3 {
             x: 4.0,
@@ -122,6 +149,33 @@ fn random_scene() -> Vec<Object> {
                 b: 0.5,
             },
             fuzziness: 0.0,
+        }),
+    }));
+    */
+
+    /*
+    world.push(Object::new(Sphere {
+        center: Vec3 {
+            x: 4.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        radius: 1.0,
+        material: Material::new(Lambertian {
+            albedo: Texture::new(texture::UV()),
+        }),
+    }));
+    */
+
+    world.push(Object::new(Sphere {
+        center: Vec3 {
+            x: 4.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        radius: 1.0,
+        material: Material::new(Lambertian {
+            albedo: Texture::new(texture::Image::new("earth.png")),
         }),
     }));
 
@@ -139,16 +193,14 @@ fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn HasHit, depth: usize) -
 
     if let Some(hit) = world.hit(ray, 0.001, f64::INFINITY) {
         let material = &hit.material;
+        let emittance = material.emit();
 
         match material.scatter(rng, ray, &hit) {
             Some(scatter) => {
-                scatter.attenuation * ray_color(rng, &scatter.outgoing, world, depth - 1)
+                emittance
+                    + scatter.attenuation * ray_color(rng, &scatter.outgoing, world, depth - 1)
             }
-            None => Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-            },
+            None => emittance,
         }
     } else {
         let unit_direction = ray.direction.unit();
@@ -213,24 +265,13 @@ fn main() {
         y: 2.0,
         z: 3.0,
     };
-    let look_at = Vec3 {
+    let look_at = Vec3::origin();
+    let up = Vec3 {
         x: 0.0,
-        y: 0.0,
+        y: 1.0,
         z: 0.0,
     };
-    let camera = Camera::new(
-        aspect_ratio,
-        20.0,
-        &Vec3 {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-        },
-        &look_from,
-        &look_at,
-        0.1,
-        10.0,
-    );
+    let camera = Camera::new(aspect_ratio, 20.0, &up, &look_from, &look_at, 0.1, 10.0);
 
     let world = Bvh::from(random_scene().as_ref());
 

@@ -36,7 +36,10 @@ impl Vec3 {
 
     /// Returns a vector in the same direction, but with length 1.
     pub fn unit(&self) -> Vec3 {
-        *self / self.norm()
+        let norm = self.norm();
+        debug_assert!(norm != 0.0, "divide by zero");
+
+        *self / norm
     }
 
     /// Generate a random vector with all components in the specified range.
@@ -111,6 +114,12 @@ impl Vec3 {
             y: 0.0,
             z: 0.0,
         }
+    }
+
+    pub fn contains_nan(&self) -> bool {
+        [Axis3::X, Axis3::Y, Axis3::Z]
+            .into_iter()
+            .any(|axis| self[axis].is_nan())
     }
 }
 

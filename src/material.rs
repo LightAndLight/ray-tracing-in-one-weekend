@@ -1,12 +1,12 @@
-use std::sync::Arc;
-
 use crate::{
     color::Color,
     hit::{Face, Hit},
     ray::Ray,
+    texture::{HasColor, Texture},
     vec3::Vec3,
 };
 use rand::{prelude::ThreadRng, Rng};
+use std::sync::Arc;
 
 pub struct Scatter {
     pub attenuation: Color,
@@ -15,14 +15,30 @@ pub struct Scatter {
 
 pub trait HasScatter {
     /// Scatter a `ray` that has `hit` a material.
-    fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter>;
+    fn scatter(&self, _: &mut ThreadRng, _: &Ray, _: &Hit) -> Option<Scatter> {
+        None
+    }
 }
 
+pub trait HasEmit {
+    fn emit(&self) -> Color {
+        Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        }
+    }
+}
+
+trait IsMaterial: HasScatter + HasEmit {}
+
+impl<T: HasScatter + HasEmit> IsMaterial for T {}
+
 #[derive(Clone)]
-pub struct Material(Arc<dyn HasScatter + Send + Sync>);
+pub struct Material(Arc<dyn IsMaterial + Send + Sync>);
 
 impl Material {
-    pub fn new<T: HasScatter + Send + Sync + 'static>(value: T) -> Self {
+    pub fn new<T: HasScatter + HasEmit + Send + Sync + 'static>(value: T) -> Self {
         Material(Arc::new(value))
     }
 }
@@ -30,6 +46,12 @@ impl Material {
 impl HasScatter for Material {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         self.0.scatter(rng, ray, hit)
+    }
+}
+
+impl HasEmit for Material {
+    fn emit(&self) -> Color {
+        self.0.emit()
     }
 }
 
@@ -61,8 +83,10 @@ impl HasScatter for DiffuseHack {
 }
 
 pub struct Lambertian {
-    pub albedo: Color,
+    pub albedo: Texture,
 }
+
+impl HasEmit for Lambertian {}
 
 impl HasScatter for Lambertian {
     fn scatter(&self, rng: &mut ThreadRng, _: &Ray, hit: &Hit) -> Option<Scatter> {
@@ -86,7 +110,7 @@ impl HasScatter for Lambertian {
         };
 
         Some(Scatter {
-            attenuation: self.albedo,
+            attenuation: self.albedo.color(&hit.texture_coord),
             outgoing: Ray {
                 origin: hit.point,
                 direction,
@@ -99,6 +123,8 @@ pub struct Metal {
     pub albedo: Color,
     pub fuzziness: f64,
 }
+
+impl HasEmit for Metal {}
 
 impl HasScatter for Metal {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
@@ -122,6 +148,8 @@ impl HasScatter for Metal {
 pub struct Dielectric {
     pub refractive_index: f64,
 }
+
+impl HasEmit for Dielectric {}
 
 impl HasScatter for Dielectric {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
@@ -161,5 +189,17 @@ impl HasScatter for Dielectric {
             attenuation,
             outgoing,
         })
+    }
+}
+
+pub struct Light {
+    pub brightness: f64,
+    pub color: Color,
+}
+
+impl HasScatter for Light {}
+impl HasEmit for Light {
+    fn emit(&self) -> Color {
+        self.brightness * self.color
     }
 }

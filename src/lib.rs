@@ -10,4 +10,5 @@ pub mod material;
 pub mod object;
 pub mod ray;
 pub mod sphere;
+pub mod texture;
 pub mod vec3;

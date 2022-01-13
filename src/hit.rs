@@ -1,4 +1,4 @@
-use crate::{material::Material, ray::Ray, vec3::Vec3};
+use crate::{material::Material, ray::Ray, texture, vec3::Vec3};
 
 pub enum Face {
     Front,
@@ -11,6 +11,7 @@ pub struct Hit {
     pub t: f64,
     pub face: Face,
     pub material: Material,
+    pub texture_coord: texture::Coord,
 }
 
 pub trait HasHit {
