@@ -2,7 +2,7 @@
 
 ![A randomly generated scene](./render.png)
 
-An implementation of [`Ray Tracing in One Weekend`](https://raytracing.github.io/) in Rust.
+An implementation of [Ray Tracing in One Weekend](https://raytracing.github.io/) in Rust.
 
 Extra features:
 * Command-line interface
