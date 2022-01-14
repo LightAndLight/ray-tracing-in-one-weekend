@@ -9,7 +9,7 @@ use rt_weekend::{
     color::Color,
     hit::HasHit,
     image::Image,
-    material::{Dielectric, HasEmit, HasScatter, Lambertian, Material, Metal},
+    material::{Dielectric, IsMaterial, Lambertian, Material, Metal},
     object::Object,
     ray::Ray,
     sphere::Sphere,

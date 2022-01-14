@@ -13,14 +13,12 @@ pub struct Scatter {
     pub outgoing: Ray,
 }
 
-pub trait HasScatter {
+pub trait IsMaterial {
     /// Scatter a `ray` that has `hit` a material.
     fn scatter(&self, _: &mut ThreadRng, _: &Ray, _: &Hit) -> Option<Scatter> {
         None
     }
-}
 
-pub trait HasEmit {
     fn emit(&self) -> Color {
         Color {
             r: 0.0,
@@ -30,26 +28,20 @@ pub trait HasEmit {
     }
 }
 
-trait IsMaterial: HasScatter + HasEmit {}
-
-impl<T: HasScatter + HasEmit> IsMaterial for T {}
-
 #[derive(Clone)]
 pub struct Material(Arc<dyn IsMaterial + Send + Sync>);
 
 impl Material {
-    pub fn new<T: HasScatter + HasEmit + Send + Sync + 'static>(value: T) -> Self {
+    pub fn new<T: IsMaterial + Send + Sync + 'static>(value: T) -> Self {
         Material(Arc::new(value))
     }
 }
 
-impl HasScatter for Material {
+impl IsMaterial for Material {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         self.0.scatter(rng, ray, hit)
     }
-}
 
-impl HasEmit for Material {
     fn emit(&self) -> Color {
         self.0.emit()
     }
@@ -70,7 +62,7 @@ pub struct DiffuseHack {
     pub albedo: Color,
 }
 
-impl HasScatter for DiffuseHack {
+impl IsMaterial for DiffuseHack {
     fn scatter(&self, rng: &mut ThreadRng, _: &Ray, hit: &Hit) -> Option<Scatter> {
         Some(Scatter {
             attenuation: self.albedo,
@@ -86,9 +78,7 @@ pub struct Lambertian {
     pub albedo: Texture,
 }
 
-impl HasEmit for Lambertian {}
-
-impl HasScatter for Lambertian {
+impl IsMaterial for Lambertian {
     fn scatter(&self, rng: &mut ThreadRng, _: &Ray, hit: &Hit) -> Option<Scatter> {
         fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
             loop {
@@ -124,9 +114,7 @@ pub struct Metal {
     pub fuzziness: f64,
 }
 
-impl HasEmit for Metal {}
-
-impl HasScatter for Metal {
+impl IsMaterial for Metal {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         let direction =
             ray.direction.reflect(&hit.normal) + self.fuzziness * random_in_unit_sphere(rng);
@@ -149,9 +137,7 @@ pub struct Dielectric {
     pub refractive_index: f64,
 }
 
-impl HasEmit for Dielectric {}
-
-impl HasScatter for Dielectric {
+impl IsMaterial for Dielectric {
     fn scatter(&self, rng: &mut ThreadRng, ray: &Ray, hit: &Hit) -> Option<Scatter> {
         let attenuation = Color {
             r: 1.0,
@@ -197,8 +183,7 @@ pub struct Light {
     pub color: Color,
 }
 
-impl HasScatter for Light {}
-impl HasEmit for Light {
+impl IsMaterial for Light {
     fn emit(&self) -> Color {
         self.brightness * self.color
     }
