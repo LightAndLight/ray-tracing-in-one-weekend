@@ -39,6 +39,7 @@ impl Bounds3 {
     }
 
     /// Compute the union of two bounding boxes.
+    #[must_use]
     pub fn union(&self, other: &Bounds3) -> Self {
         Bounds3 {
             min: Vec3 {

@@ -26,6 +26,7 @@ impl Vec3 {
     }
 
     /// Cross product.
+    #[must_use]
     pub fn cross(&self, v: Vec3) -> Vec3 {
         Vec3 {
             x: self.y * v.z - self.z * v.y,
@@ -35,6 +36,7 @@ impl Vec3 {
     }
 
     /// Returns a vector in the same direction, but with length 1.
+    #[must_use]
     pub fn unit(&self) -> Vec3 {
         let norm = self.norm();
         debug_assert!(norm != 0.0, "divide by zero");
@@ -58,11 +60,13 @@ impl Vec3 {
     }
 
     /// Negate the vector.
+    #[must_use]
     pub fn negate(&self) -> Self {
         -1.0 * *self
     }
 
     /// Reflect the vector around a surface `normal.`
+    #[must_use]
     pub fn reflect(&self, normal: &Vec3) -> Self {
         *self - 2.0 * self.dot(*normal) * *normal
     }

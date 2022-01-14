@@ -1,4 +1,4 @@
-use image::{DynamicImage, GenericImageView, RgbImage};
+use image::{GenericImageView, RgbImage};
 
 use crate::color::Color;
 use std::sync::Arc;
