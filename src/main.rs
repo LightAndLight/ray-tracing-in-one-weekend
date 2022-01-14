@@ -84,30 +84,11 @@ fn random_scene() -> Vec<Object> {
         }
     }
 
-    /*
     world.push(Object::new(Sphere {
         center: Vec3 {
-            x: 0.0,
-            y: 20.0,
-            z: 0.0,
-        },
-        radius: 1.0,
-        material: Material::new(Light {
-            brightness: 200.0,
-            color: Color {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-            },
-        }),
-    }));
-    */
-
-    world.push(Object::new(Sphere {
-        center: Vec3 {
-            x: 0.0,
+            x: -4.0,
             y: 1.0,
-            z: 0.0,
+            z: -4.0,
         },
         radius: 1.0,
         material: Material::new(Dielectric {
@@ -133,10 +114,9 @@ fn random_scene() -> Vec<Object> {
         }),
     }));
 
-    /*
     world.push(Object::new(Sphere {
         center: Vec3 {
-            x: 4.0,
+            x: 0.0,
             y: 1.0,
             z: 0.0,
         },
@@ -150,27 +130,12 @@ fn random_scene() -> Vec<Object> {
             fuzziness: 0.0,
         }),
     }));
-    */
-
-    /*
-    world.push(Object::new(Sphere {
-        center: Vec3 {
-            x: 4.0,
-            y: 1.0,
-            z: 0.0,
-        },
-        radius: 1.0,
-        material: Material::new(Lambertian {
-            albedo: Texture::new(texture::UV()),
-        }),
-    }));
-    */
 
     world.push(Object::new(Sphere {
         center: Vec3 {
-            x: 4.0,
+            x: 0.0,
             y: 1.0,
-            z: 0.0,
+            z: 4.0,
         },
         radius: 1.0,
         material: Material::new(Lambertian {
@@ -260,9 +225,9 @@ fn main() {
     let aspect_ratio = image_width as f64 / image_height as f64;
 
     let look_from = Vec3 {
-        x: 13.0,
-        y: 2.0,
-        z: 3.0,
+        x: -13.0,
+        y: 4.0,
+        z: -4.0,
     };
     let look_at = Vec3::ZERO;
     let up = Vec3 {
@@ -270,7 +235,17 @@ fn main() {
         y: 1.0,
         z: 0.0,
     };
-    let camera = Camera::new(aspect_ratio, 20.0, &up, &look_from, &look_at, 0.1, 10.0);
+    let v_fov = 30.0;
+    let focal_distance = (look_from - look_at).norm();
+    let camera = Camera::new(
+        aspect_ratio,
+        v_fov,
+        &up,
+        &look_from,
+        &look_at,
+        0.1,
+        focal_distance,
+    );
 
     let world = Bvh::from(random_scene().as_ref());
 
