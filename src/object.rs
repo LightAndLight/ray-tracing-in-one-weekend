@@ -1,16 +1,16 @@
 use crate::{bounds::Bounds3, hit::Hit, ray::Ray, vec3::Vec3};
 use std::sync::Arc;
 
-pub trait IsObject {
+pub trait IsObject: Send + Sync {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit>;
     fn bounds(&self) -> Bounds3;
 }
 
 #[derive(Clone)]
-pub struct Object(Arc<dyn IsObject + Sync + Send>);
+pub struct Object(Arc<dyn IsObject>);
 
 impl Object {
-    pub fn new<T: IsObject + Send + Sync + 'static>(item: T) -> Self {
+    pub fn new<T: IsObject + 'static>(item: T) -> Self {
         Object(Arc::new(item))
     }
 }

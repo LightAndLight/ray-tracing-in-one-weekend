@@ -1,6 +1,5 @@
-use image::{GenericImageView, RgbImage};
-
 use crate::color::Color;
+use image::{GenericImageView, RgbImage};
 use std::sync::Arc;
 
 pub struct Coord {
@@ -8,19 +7,19 @@ pub struct Coord {
     pub v: f64,
 }
 
-pub trait HasColor {
+pub trait IsTexture: Send + Sync {
     fn color(&self, c: &Coord) -> Color;
 }
 
-pub struct Texture(Arc<dyn HasColor + Send + Sync>);
+pub struct Texture(Arc<dyn IsTexture>);
 
 impl Texture {
-    pub fn new<T: HasColor + Send + Sync + 'static>(value: T) -> Self {
+    pub fn new<T: IsTexture + 'static>(value: T) -> Self {
         Texture(Arc::new(value))
     }
 }
 
-impl HasColor for Texture {
+impl IsTexture for Texture {
     fn color(&self, c: &Coord) -> Color {
         self.0.color(c)
     }
@@ -30,7 +29,7 @@ pub struct Constant {
     pub color: Color,
 }
 
-impl HasColor for Constant {
+impl IsTexture for Constant {
     fn color(&self, _: &Coord) -> Color {
         self.color
     }
@@ -38,7 +37,7 @@ impl HasColor for Constant {
 
 pub struct UV();
 
-impl HasColor for UV {
+impl IsTexture for UV {
     fn color(&self, c: &Coord) -> Color {
         Color {
             r: c.u,
@@ -71,7 +70,7 @@ impl Image {
     }
 }
 
-impl HasColor for Image {
+impl IsTexture for Image {
     fn color(&self, c: &Coord) -> Color {
         let x = (c.u * self.width).trunc() as u32;
         let y = ((1.0 - c.v) * self.height).trunc() as u32;

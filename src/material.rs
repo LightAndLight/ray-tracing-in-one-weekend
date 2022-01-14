@@ -2,7 +2,7 @@ use crate::{
     color::Color,
     hit::{Face, Hit},
     ray::Ray,
-    texture::{HasColor, Texture},
+    texture::{IsTexture, Texture},
     vec3::Vec3,
 };
 use rand::{prelude::ThreadRng, Rng};
@@ -13,7 +13,7 @@ pub struct Scatter {
     pub outgoing: Ray,
 }
 
-pub trait IsMaterial {
+pub trait IsMaterial: Send + Sync {
     /// Scatter a `ray` that has `hit` a material.
     fn scatter(&self, _: &mut ThreadRng, _: &Ray, _: &Hit) -> Option<Scatter> {
         None
@@ -29,10 +29,10 @@ pub trait IsMaterial {
 }
 
 #[derive(Clone)]
-pub struct Material(Arc<dyn IsMaterial + Send + Sync>);
+pub struct Material(Arc<dyn IsMaterial>);
 
 impl Material {
-    pub fn new<T: IsMaterial + Send + Sync + 'static>(value: T) -> Self {
+    pub fn new<T: IsMaterial + 'static>(value: T) -> Self {
         Material(Arc::new(value))
     }
 }
