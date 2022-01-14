@@ -10,6 +10,12 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
+    pub const ZERO: Self = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+
     /// Euclidian norm squared.
     pub fn norm_squared(&self) -> f64 {
         self.x.powi(2) + self.y.powi(2) + self.z.powi(2)
@@ -108,15 +114,6 @@ impl Vec3 {
             let refracted_perpendicular: Vec3 =
                 -(1.0 - refracted_parallel.norm_squared()).sqrt() * *normal;
             Some(refracted_parallel + refracted_perpendicular)
-        }
-    }
-
-    /// `(0, 0, 0)`
-    pub fn origin() -> Self {
-        Vec3 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
         }
     }
 

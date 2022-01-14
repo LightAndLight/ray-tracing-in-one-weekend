@@ -7,10 +7,9 @@ use rt_weekend::{
     bvh::Bvh,
     camera::Camera,
     color::Color,
-    hit::HasHit,
     image::Image,
     material::{Dielectric, IsMaterial, Lambertian, Material, Metal},
-    object::Object,
+    object::{IsObject, Object},
     ray::Ray,
     sphere::Sphere,
     texture::{self, Texture},
@@ -182,7 +181,7 @@ fn random_scene() -> Vec<Object> {
     world
 }
 
-fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn HasHit, depth: usize) -> Color {
+fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn IsObject, depth: usize) -> Color {
     if depth == 0 {
         return Color {
             r: 0.0,
@@ -222,7 +221,7 @@ fn ray_color(rng: &mut ThreadRng, ray: &Ray, world: &dyn HasHit, depth: usize) -
 fn get_pixel_color(
     rng: &mut ThreadRng,
     camera: &Camera,
-    world: &dyn HasHit,
+    world: &dyn IsObject,
     recursion_depth: usize,
     rays_per_pixel: usize,
     rays_per_pixel_f64: f64,
@@ -265,7 +264,7 @@ fn main() {
         y: 2.0,
         z: 3.0,
     };
-    let look_at = Vec3::origin();
+    let look_at = Vec3::ZERO;
     let up = Vec3 {
         x: 0.0,
         y: 1.0,

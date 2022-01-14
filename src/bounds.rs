@@ -134,24 +134,3 @@ impl Bounds3 {
         !t_interval.is_empty()
     }
 }
-
-pub trait HasBounds {
-    fn bounds(&self) -> Bounds3;
-}
-
-impl<T: HasBounds> HasBounds for &[T] {
-    fn bounds(&self) -> Bounds3 {
-        if self.is_empty() {
-            Bounds3::point(Vec3::origin())
-        } else {
-            let init = self[0].bounds();
-            self.iter().fold(init, |acc, el| acc.union(&el.bounds()))
-        }
-    }
-}
-
-impl<T: HasBounds> HasBounds for Vec<T> {
-    fn bounds(&self) -> Bounds3 {
-        self.as_slice().bounds()
-    }
-}

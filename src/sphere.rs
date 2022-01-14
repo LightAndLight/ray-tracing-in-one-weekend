@@ -1,7 +1,8 @@
 use crate::{
-    bounds::{Bounds3, HasBounds},
-    hit::{Face, HasHit, Hit},
+    bounds::Bounds3,
+    hit::{Face, Hit},
     material::Material,
+    object::IsObject,
     ray::Ray,
     texture,
     vec3::Vec3,
@@ -14,18 +15,7 @@ pub struct Sphere {
     pub material: Material,
 }
 
-impl HasBounds for Sphere {
-    fn bounds(&self) -> Bounds3 {
-        let corner = Vec3 {
-            x: self.radius,
-            y: self.radius,
-            z: self.radius,
-        };
-        Bounds3::new(self.center - corner, self.center + corner)
-    }
-}
-
-impl HasHit for Sphere {
+impl IsObject for Sphere {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         debug_assert!(
             !(ray.origin.x.is_nan()
@@ -113,5 +103,14 @@ impl HasHit for Sphere {
                 texture_coord,
             })
         }
+    }
+
+    fn bounds(&self) -> Bounds3 {
+        let corner = Vec3 {
+            x: self.radius,
+            y: self.radius,
+            z: self.radius,
+        };
+        Bounds3::new(self.center - corner, self.center + corner)
     }
 }

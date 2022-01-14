@@ -1,31 +1,59 @@
-use crate::{
-    bounds::{Bounds3, HasBounds},
-    hit::{HasHit, Hit},
-    ray::Ray,
-};
+use crate::{bounds::Bounds3, hit::Hit, ray::Ray, vec3::Vec3};
 use std::sync::Arc;
 
-trait IsObject: HasHit + HasBounds {}
-
-impl<T: HasHit + HasBounds> IsObject for T {}
+pub trait IsObject {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit>;
+    fn bounds(&self) -> Bounds3;
+}
 
 #[derive(Clone)]
 pub struct Object(Arc<dyn IsObject + Sync + Send>);
 
 impl Object {
-    pub fn new<T: HasHit + HasBounds + Send + Sync + 'static>(item: T) -> Self {
+    pub fn new<T: IsObject + Send + Sync + 'static>(item: T) -> Self {
         Object(Arc::new(item))
     }
 }
 
-impl HasBounds for Object {
+impl IsObject for Object {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+        self.0.hit(ray, t_min, t_max)
+    }
+
     fn bounds(&self) -> Bounds3 {
         self.0.bounds()
     }
 }
 
-impl HasHit for Object {
+impl<T: IsObject> IsObject for &[T] {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
-        self.0.hit(ray, t_min, t_max)
+        let mut result = None;
+        let mut closest_so_far = t_max;
+        for object in self.iter() {
+            if let Some(hit) = object.hit(ray, t_min, closest_so_far) {
+                closest_so_far = hit.t;
+                result = Some(hit);
+            }
+        }
+        result
+    }
+
+    fn bounds(&self) -> Bounds3 {
+        if self.is_empty() {
+            Bounds3::point(Vec3::ZERO)
+        } else {
+            let init = self[0].bounds();
+            self.iter().fold(init, |acc, el| acc.union(&el.bounds()))
+        }
+    }
+}
+
+impl<T: IsObject> IsObject for Vec<T> {
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
+        self.as_slice().hit(ray, t_min, t_max)
+    }
+
+    fn bounds(&self) -> Bounds3 {
+        self.as_slice().bounds()
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
-    bounds::{Bounds3, HasBounds},
-    hit::{HasHit, Hit},
-    object::Object,
+    bounds::Bounds3,
+    hit::Hit,
+    object::{IsObject, Object},
     ray::Ray,
     vec3::Vec3,
 };
@@ -110,20 +110,18 @@ impl From<&[Object]> for Bvh {
     }
 }
 
-impl HasBounds for Bvh {
-    fn bounds(&self) -> Bounds3 {
-        match self {
-            Bvh::Empty => Bounds3::point(Vec3::origin()),
-            Bvh::Node(node) => node.bounds(),
-        }
-    }
-}
-
-impl HasHit for Bvh {
+impl IsObject for Bvh {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         match self {
             Bvh::Empty => None,
             Bvh::Node(node) => node.hit(ray, t_min, t_max),
+        }
+    }
+
+    fn bounds(&self) -> Bounds3 {
+        match self {
+            Bvh::Empty => Bounds3::point(Vec3::ZERO),
+            Bvh::Node(node) => node.bounds(),
         }
     }
 }
@@ -158,16 +156,7 @@ impl BvhNode {
     }
 }
 
-impl HasBounds for BvhNode {
-    fn bounds(&self) -> Bounds3 {
-        match self {
-            BvhNode::Branch { bounds, .. } => *bounds,
-            BvhNode::Leaf { bounds, .. } => *bounds,
-        }
-    }
-}
-
-impl HasHit for BvhNode {
+impl IsObject for BvhNode {
     fn hit(&self, ray: &crate::ray::Ray, t_min: f64, t_max: f64) -> Option<Hit> {
         match self {
             BvhNode::Branch {
@@ -191,6 +180,13 @@ impl HasHit for BvhNode {
                     None
                 }
             }
+        }
+    }
+
+    fn bounds(&self) -> Bounds3 {
+        match self {
+            BvhNode::Branch { bounds, .. } => *bounds,
+            BvhNode::Leaf { bounds, .. } => *bounds,
         }
     }
 }
